@@ -24,3 +24,16 @@ translates to reducing unnecessary API calls. This issue affects directly the in
 **Setup confirmation:** [✅] App runs locally at localhost:5173
 
 **Cohort ledger:** [✅] Issue added to cohort ledger
+
+## Week 8 — Reproduction & solution planning
+
+**Reproduction commit link:** [link to commit documenting the reproduced issue]
+
+**Reproduction summary:**
+I wrote a unit tests that verify if the `ingest_readme` function that is part of the `IngestionPipeline` embeds unchanged 
+READMEs more than once. I observed that the logic in the pipeline is not fully implemented: the functions that record 
+and check for ingested sources have placeholder code.
+
+**PLAN.md link:** [link to PLAN.md in your fork]
+
+**Blockers or open questions:** -
