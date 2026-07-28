@@ -27,13 +27,14 @@ translates to reducing unnecessary API calls. This issue affects directly the in
 
 ## Week 8 — Reproduction & solution planning
 
-**Reproduction commit link:** [link to commit documenting the reproduced issue]
+**Reproduction commit link:** [Commit fb21f2a
+](https://github.com/JoseLoarca/pathreview/commit/fb21f2afd7318f382f4e99f6c77de25680b0f0a2)
 
 **Reproduction summary:**
 I wrote a unit tests that verify if the `ingest_readme` function that is part of the `IngestionPipeline` embeds unchanged 
 READMEs more than once. I observed that the logic in the pipeline is not fully implemented: the functions that record 
 and check for ingested sources have placeholder code.
 
-**PLAN.md link:** [link to PLAN.md in your fork]
+**PLAN.md link:** [PLAN.md](https://github.com/JoseLoarca/pathreview/blob/fix/13-add-content-hash-to-detect-unchanged-docs/PLAN.md)
 
 **Blockers or open questions:** -
