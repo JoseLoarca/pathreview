@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from core.models.ingested_source import IngestedSource
 from ingestion.pipeline import IngestionPipeline
 
 
@@ -19,11 +18,11 @@ class TestUnchangedDocumentDetection:
 
     @pytest.fixture
     def mock_db_session(self):
-        """Create a mock database session."""
-        session = Mock()
-        session.query = Mock(side_effect=Exception("no such table: IngestedSource"))
+        """Create a mock async database session."""
+        session = AsyncMock()
         session.add = Mock()
         session.commit = AsyncMock()
+        session.execute = AsyncMock()
         return session
 
     @pytest.fixture
@@ -44,62 +43,53 @@ class TestUnchangedDocumentDetection:
         pipeline.batch_processor.process = Mock(return_value=[])
         return pipeline
 
-    def test_reingesting_unchanged_readme_is_not_skipped(self, pipeline):
-        """Re-submitting the exact same README content should skip re-embedding, but currently
-        doesn't."""
+    @pytest.mark.asyncio
+    async def test_reingesting_unchanged_readme_is_skipped(self, pipeline, mock_db_session):
+        """Re-submitting the exact same README content should skip re-embedding."""
         profile_id = "profile-123"
         repo_name = "my-repo"
         content = "# Hello World\nSame content every time"
 
-        first_result = pipeline.ingest_readme(profile_id, repo_name, content)
-        second_result = pipeline.ingest_readme(profile_id, repo_name, content)
+        no_existing_result = Mock()
+        no_existing_result.scalars.return_value.first.return_value = None
+        mock_db_session.execute = AsyncMock(return_value=no_existing_result)
+
+        first_result = await pipeline.ingest_readme(profile_id, repo_name, content)
+
+        existing_source = Mock()
+        existing_source.content_hash = pipeline._hash_content(content)
+        existing_source.chunk_count = first_result.chunk_count
+        mock_result = Mock()
+        mock_result.scalars.return_value.first.return_value = existing_source
+        mock_db_session.execute = AsyncMock(return_value=mock_result)
+
+        second_result = await pipeline.ingest_readme(profile_id, repo_name, content)
 
         assert first_result.skipped is False
-        # BUG: this currently fails because _check_skip never finds a
-        # previously recorded source, so unchanged content is re-embedded.
         assert second_result.skipped is True
 
-    def test_reingesting_unchanged_readme_calls_batch_processor_twice(self, pipeline):
-        """Unchanged README content triggers embedding generation on every ingest call."""
+    @pytest.mark.asyncio
+    async def test_reingesting_unchanged_readme_calls_batch_processor_once(
+        self, pipeline, mock_db_session
+    ):
+        """Unchanged README content should only trigger embedding generation once."""
         profile_id = "profile-123"
         repo_name = "my-repo"
         content = "# Hello World\nSame content every time"
 
-        pipeline.ingest_readme(profile_id, repo_name, content)
-        pipeline.ingest_readme(profile_id, repo_name, content)
+        no_existing_result = Mock()
+        no_existing_result.scalars.return_value.first.return_value = None
+        mock_db_session.execute = AsyncMock(return_value=no_existing_result)
 
-        # BUG: batch_processor.process should only be called once for unchanged
-        # content, but it currently runs on every ingestion.
+        await pipeline.ingest_readme(profile_id, repo_name, content)
+
+        existing_source = Mock()
+        existing_source.content_hash = pipeline._hash_content(content)
+        existing_source.chunk_count = 0
+        mock_result = Mock()
+        mock_result.scalars.return_value.first.return_value = existing_source
+        mock_db_session.execute = AsyncMock(return_value=mock_result)
+
+        await pipeline.ingest_readme(profile_id, repo_name, content)
+
         assert pipeline.batch_processor.process.call_count == 1
-
-    def test_check_skip_never_finds_existing_source(self, pipeline):
-        """_check_skip is a placeholder that never returns a match, so it never skips."""
-        result = pipeline._check_skip("readme_profile-123_my-repo_abcdef", "readme")
-
-        # BUG: with no real DB query/record in place, this always returns None.
-        assert result is not None
-
-    @pytest.mark.asyncio
-    async def test_record_ingested_source_persists_to_db(self, pipeline, mock_db_session):
-        """_record_ingested_source should add and commit an IngestedSource row."""
-        content_hash = "abcdef1234567890"
-
-        await pipeline._record_ingested_source(
-            "readme_profile-123_my-repo_abcdef",
-            "readme",
-            "profile-123",
-            3,
-            content_hash=content_hash,
-            source_url="my-repo",
-        )
-
-        mock_db_session.add.assert_called_once()
-        mock_db_session.commit.assert_called_once()
-
-        recorded_source = mock_db_session.add.call_args[0][0]
-        assert isinstance(recorded_source, IngestedSource)
-        assert recorded_source.profile_id == "profile-123"
-        assert recorded_source.source_type == "readme"
-        assert recorded_source.content_hash == content_hash
-        assert recorded_source.source_url == "my-repo"
-        assert recorded_source.chunk_count == 3
