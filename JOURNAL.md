@@ -38,3 +38,33 @@ and check for ingested sources have placeholder code.
 **PLAN.md link:** [PLAN.md](https://github.com/JoseLoarca/pathreview/blob/fix/13-add-content-hash-to-detect-unchanged-docs/PLAN.md)
 
 **Blockers or open questions:** -
+
+## Week 9 — Solution building & PR submission
+
+### Check-in 1 (Wed 29 Jul)
+
+**Current progress:** I have implemented all the subtasks listed in PLAN.md: fix `_check_skip`, 
+fix `_record_ingested_source`, update calls, add unit tests.
+
+**Next steps:** My next steps are to self-review against contribution standards, open a draft PR, and finalize and 
+submit the PR.
+
+**Blockers:** -
+
+---
+
+### Check-in 2 (end of week)
+
+**PR link:** [link to your submitted pull request]
+
+**Branch:** [the branch name you worked on, e.g. `fix/123-short-description`]
+
+**What you built:**
+[1–3 sentences summarizing what your fix does and how it works]
+
+**Tests added or updated:**
+[Which test files did you touch? What do they cover?]
+
+**Self-review confirmation:** [ ] make check passes  [ ] make test-unit passes
+
+**Draft PR feedback received from:** [name or Slack handle, or "none"]
