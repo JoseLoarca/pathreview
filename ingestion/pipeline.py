@@ -2,6 +2,7 @@ import hashlib
 from dataclasses import dataclass
 
 import structlog
+from sqlalchemy import and_, select
 
 from core.models.ingested_source import IngestedSource
 
@@ -287,28 +288,46 @@ class IngestionPipeline:
             content = content.encode()
         return hashlib.sha256(content).hexdigest()[:16]
 
-    def _check_skip(self, source_id: str, source_type: str) -> IngestResult | None:
+    async def _check_skip(
+        self,
+        source_id: str,
+        source_type: str,
+        profile_id: str,
+        content_hash: str,
+        filename: str | None = None,
+    ) -> IngestResult | None:
         """
-        Check if source has already been ingested.
+        Check if source has already been ingested with unchanged content.
+
+        Looks up the most recent IngestedSource for this profile/source_type
+        (and filename, when applicable) and compares its content_hash to
+        the incoming content_hash.
 
         Returns IngestResult if should skip, None if should proceed.
         """
         try:
-            # Query database for existing source
-            # This assumes a table/model named IngestedSource
-            existing = (
-                self.db_session.query("IngestedSource")  # Placeholder - actual query depends on ORM
-                .filter_by(source_id=source_id)
-                .first()
+            stmt = (
+                select(IngestedSource)
+                .where(
+                    and_(
+                        IngestedSource.profile_id == profile_id,
+                        IngestedSource.source_type == source_type,
+                        IngestedSource.filename == filename,
+                    )
+                )
+                .order_by(IngestedSource.ingested_at.desc())
             )
 
-            if existing:
-                logger.info("Source already ingested, skipping", source_id=source_id)
+            result = await self.db_session.execute(stmt)
+            existing = result.scalars().first()
+
+            if existing and existing.content_hash == content_hash:
+                logger.info("Source unchanged, skipping re-embedding", source_id=source_id)
                 return IngestResult(
                     source_id=source_id,
-                    chunk_count=0,
+                    chunk_count=existing.chunk_count,
                     skipped=True,
-                    skip_reason="Source already ingested",
+                    skip_reason="Content unchanged since last ingestion",
                 )
         except Exception as e:
             logger.warning(
