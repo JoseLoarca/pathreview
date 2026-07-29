@@ -1,8 +1,9 @@
 import hashlib
 from dataclasses import dataclass
-from typing import Optional
 
 import structlog
+
+from core.models.ingested_source import IngestedSource
 
 from .chunking.strategy_selector import StrategySelector
 from .embeddings.batch_processor import BatchEmbeddingProcessor
@@ -11,17 +12,17 @@ from .parsers.readme_parser import ReadmeParser
 from .parsers.repo_analyzer import RepoAnalyzer
 from .parsers.resume_parser import ResumeParser
 
-
 logger = structlog.get_logger()
 
 
 @dataclass
 class IngestResult:
     """Result of ingesting a source."""
+
     source_id: str
     chunk_count: int
     skipped: bool
-    skip_reason: Optional[str] = None
+    skip_reason: str | None = None
 
 
 class IngestionPipeline:
@@ -86,16 +87,21 @@ class IngestionPipeline:
         try:
             # Parse resume
             parse_result = self.resume_parser.parse(content)
-            logger.info("Resume parsed successfully", sections=parse_result.metadata.get("detected_sections"))
+            logger.info(
+                "Resume parsed successfully",
+                sections=parse_result.metadata.get("detected_sections"),
+            )
 
             # Prepare metadata
             metadata = parse_result.metadata.copy()
-            metadata.update({
-                "source_id": source_id,
-                "profile_id": profile_id,
-                "filename": filename,
-                "source_type": "resume",
-            })
+            metadata.update(
+                {
+                    "source_id": source_id,
+                    "profile_id": profile_id,
+                    "filename": filename,
+                    "source_type": "resume",
+                }
+            )
 
             # Chunk the content
             chunks = self.strategy_selector.chunk(parse_result.text, metadata)
@@ -165,12 +171,14 @@ class IngestionPipeline:
 
             # Prepare metadata
             metadata = parse_result.metadata.copy()
-            metadata.update({
-                "source_id": source_id,
-                "profile_id": profile_id,
-                "repo_name": repo_name,
-                "source_type": "readme",
-            })
+            metadata.update(
+                {
+                    "source_id": source_id,
+                    "profile_id": profile_id,
+                    "repo_name": repo_name,
+                    "source_type": "readme",
+                }
+            )
 
             # Chunk the content
             chunks = self.strategy_selector.chunk(parse_result.text, metadata)
@@ -239,11 +247,13 @@ class IngestionPipeline:
 
             # Prepare metadata
             metadata = parse_result.metadata.copy()
-            metadata.update({
-                "source_id": source_id,
-                "profile_id": profile_id,
-                "source_type": "repo",
-            })
+            metadata.update(
+                {
+                    "source_id": source_id,
+                    "profile_id": profile_id,
+                    "source_type": "repo",
+                }
+            )
 
             # Chunk the content
             chunks = self.strategy_selector.chunk(parse_result.text, metadata)
@@ -277,7 +287,7 @@ class IngestionPipeline:
             content = content.encode()
         return hashlib.sha256(content).hexdigest()[:16]
 
-    def _check_skip(self, source_id: str, source_type: str) -> Optional[IngestResult]:
+    def _check_skip(self, source_id: str, source_type: str) -> IngestResult | None:
         """
         Check if source has already been ingested.
 
@@ -286,9 +296,11 @@ class IngestionPipeline:
         try:
             # Query database for existing source
             # This assumes a table/model named IngestedSource
-            existing = self.db_session.query(
-                "IngestedSource"  # Placeholder - actual query depends on ORM
-            ).filter_by(source_id=source_id).first()
+            existing = (
+                self.db_session.query("IngestedSource")  # Placeholder - actual query depends on ORM
+                .filter_by(source_id=source_id)
+                .first()
+            )
 
             if existing:
                 logger.info("Source already ingested, skipping", source_id=source_id)
@@ -307,12 +319,15 @@ class IngestionPipeline:
 
         return None
 
-    def _record_ingested_source(
+    async def _record_ingested_source(
         self,
         source_id: str,
         source_type: str,
         profile_id: str,
         chunk_count: int,
+        content_hash: str,
+        filename: str | None = None,
+        source_url: str | None = None,
     ) -> None:
         """
         Record that a source has been ingested.
@@ -322,15 +337,27 @@ class IngestionPipeline:
             source_type: Type of source (resume, readme, repo)
             profile_id: ID of profile owner
             chunk_count: Number of chunks created
+            content_hash: SHA256 hash of the ingested content
+            filename: Original filename, if applicable
+            source_url: Source URL (e.g. repo name), if applicable
         """
         try:
-            # This is a placeholder for actual database recording
-            # In a real implementation, would create IngestedSource record
+            ingested_source = IngestedSource(
+                profile_id=profile_id,
+                source_type=source_type,
+                source_url=source_url,
+                filename=filename,
+                content_hash=content_hash,
+                chunk_count=chunk_count,
+            )
+            self.db_session.add(ingested_source)
+            await self.db_session.commit()
             logger.info(
-                "Recording ingested source",
+                "Recorded ingested source",
                 source_id=source_id,
                 source_type=source_type,
                 profile_id=profile_id,
+                content_hash=content_hash,
                 chunk_count=chunk_count,
             )
         except Exception as e:

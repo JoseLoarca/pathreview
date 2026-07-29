@@ -1,9 +1,10 @@
 """Tests reproducing missing content-hash-based skip detection in ingestion pipeline."""
 
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from core.models.ingested_source import IngestedSource
 from ingestion.pipeline import IngestionPipeline
 
 
@@ -21,6 +22,8 @@ class TestUnchangedDocumentDetection:
         """Create a mock database session."""
         session = Mock()
         session.query = Mock(side_effect=Exception("no such table: IngestedSource"))
+        session.add = Mock()
+        session.commit = AsyncMock()
         return session
 
     @pytest.fixture
@@ -76,12 +79,27 @@ class TestUnchangedDocumentDetection:
         # BUG: with no real DB query/record in place, this always returns None.
         assert result is not None
 
-    def test_record_ingested_source_does_not_persist_to_db(self, pipeline, mock_db_session):
-        """_record_ingested_source is a placeholder that never writes to the database."""
-        pipeline._record_ingested_source(
-            "readme_profile-123_my-repo_abcdef", "readme", "profile-123", 3
+    @pytest.mark.asyncio
+    async def test_record_ingested_source_persists_to_db(self, pipeline, mock_db_session):
+        """_record_ingested_source should add and commit an IngestedSource row."""
+        content_hash = "abcdef1234567890"
+
+        await pipeline._record_ingested_source(
+            "readme_profile-123_my-repo_abcdef",
+            "readme",
+            "profile-123",
+            3,
+            content_hash=content_hash,
+            source_url="my-repo",
         )
 
-        # BUG: nothing is ever added or committed to the db_session.
         mock_db_session.add.assert_called_once()
         mock_db_session.commit.assert_called_once()
+
+        recorded_source = mock_db_session.add.call_args[0][0]
+        assert isinstance(recorded_source, IngestedSource)
+        assert recorded_source.profile_id == "profile-123"
+        assert recorded_source.source_type == "readme"
+        assert recorded_source.content_hash == content_hash
+        assert recorded_source.source_url == "my-repo"
+        assert recorded_source.chunk_count == 3
