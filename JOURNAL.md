@@ -55,16 +55,32 @@ submit the PR.
 
 ### Check-in 2 (end of week)
 
-**PR link:** [link to your submitted pull request]
+**PR link:** [fix(ingestion): skip re-embedding unchanged documents via content hash - #507
+](https://github.com/ascherj/pathreview/pull/507)
 
-**Branch:** [the branch name you worked on, e.g. `fix/123-short-description`]
+**Branch:** `fix/13-add-content-hash-to-detect-unchanged-docs`
 
 **What you built:**
-[1–3 sentences summarizing what your fix does and how it works]
+This PR fixes unchanged READMEs (and resumes/repo metadata) being needlessly re-embedded on every re-submission by 
+wiring up the content-hash deduplication that was already half-built but never functional. _hash_content already 
+computed a SHA256 hash, but _check_skip used a broken, always-failing DB query and _record_ingested_source never 
+actually persisted anything, so the "already ingested" check silently no-op'd and every ingestion re-ran the embedding 
+pipeline regardless of content. Both methods now query/write real IngestedSource rows (keyed by profile_id, source_type, 
+and filename, with content_hash compared against the most recent record), and 
+ingest_resume/ingest_readme/ingest_repo_metadata were converted to async to match the app's async-only DB session and 
+updated to call the fixed methods correctly — eliminating wasted embedding-provider API calls for content that hasn't 
+changed.
 
 **Tests added or updated:**
-[Which test files did you touch? What do they cover?]
+- tests/unit/test_ingestion_pipeline_dedup.py (new) — covers the shared dedup helpers directly:
+  - _check_skip returns None when no prior IngestedSource exists for the profile/type/filename.
+  - _check_skip returns a skipped IngestResult when the stored content_hash matches the incoming one.
+  - _check_skip returns None (proceeds with ingestion) when the stored hash differs from the incoming one.
+  - _record_ingested_source builds and persists (add + commit) an IngestedSource row with the correct profile_id, source_type, content_hash, source_url, and chunk_count.
+- tests/unit/test_readme_unchanged_detection.py (new) — covers the end-to-end black-box behavior through the public ingest_readme API:
+  - Re-submitting the exact same README content is skipped on the second call.
+  - Re-submitting unchanged README content only triggers the embedding batch processor once, not on every call.
 
-**Self-review confirmation:** [ ] make check passes  [ ] make test-unit passes
+**Self-review confirmation:** [✅] make check passes  [✅] make test-unit passes - both checks pass with pre-existing failures that are unrelated to this fix
 
-**Draft PR feedback received from:** [name or Slack handle, or "none"]
+**Draft PR feedback received from:** none
