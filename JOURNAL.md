@@ -84,3 +84,51 @@ changed.
 **Self-review confirmation:** [✅] make check passes  [✅] make test-unit passes - both checks pass with pre-existing failures that are unrelated to this fix
 
 **Draft PR feedback received from:** none
+
+## Week 10 — Iteration & reflection
+
+### Reviewer feedback
+
+**Feedback received:** [ ] Yes  [✅] No — still awaiting review
+
+**Summary of feedback:** No feedback came in
+
+**How you responded:** -
+
+---
+
+### Reflection
+
+**What was harder than you expected?**
+Figuring out where exactly the issues was located. During my initial code review, I had a good idea of which files I 
+was going to be working on. But once I started reading the files, I got a little bit confused. My main source of 
+confusion is that I first I thought the issue didn't exist, why? Because the code and database schema to handle 
+duplicates using the content hash was already there! So I had to dive deeper, and at the end it turned out the actual
+issue was that the embedding history was not getting persisted in the database, so there was no way to know if a file
+was a duplicate. 
+
+**What did you learn about working in a large codebase?** Large codebases have a ton of moving pieces, and sometimes 
+making the smallest change on one of its pieces can bring everything down. It is important that no matter how simple or
+small a fix might look, you have to make sure that it doesn't affect other parts of the project. 
+
+It is also important to pay attention to contributing guidelines or coding/testing pattern/styles because these have a 
+direct impact on the work you have to make. If you don't pay attention to an existing contributing guideline, and make
+a change that doesn't meet the guidelines at all, you are probably going to end up rewriting your fix/change. Which 
+means you could end up spending more time than expected on an issue.
+
+**How did AI tools help — and where did they fall short?** I found AI to be really helpful at navigating the large 
+codebase, and helping me understand how all the pieces were connected. While I had a pretty good general idea of how
+the codebase worked (at least the part related to the issue I was fixing), AI helped me notice some small aspects of the
+codebase that I was ignoring.
+
+I don't know if it is fair to say that AI tools fell short at being aware of coding patterns/styles, but I felt that 
+this is something you have to be pretty clear on. It was important for me to be aware of this because I was able to
+explicitly tell AI what was I expecting from its output when I asked it to generate some unit tests for my fix.
+
+**What would you do differently if you started over?** Maybe planning or the process itself. The fix I was working on 
+was not implemented in the project yet, which meant I was never going to be able to replicate it via the frontend. I 
+spent sometime trying to trigger the issue until I realized it was a hopeless task. After that I change my strategy and
+focused on replicating the issue through unit testing. If I had planned this replicating process a little better at 
+first, I would have caught this and wouldn't have "wasted" time trying to replicate the issue the wrong way.
+
+**What are you most proud of from this module?** Making it all the way to the end.
